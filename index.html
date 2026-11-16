@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>學生訂正追蹤板</title>
+<style>
+* { box-sizing: border-box; font-family: "Microsoft JhengHei", sans-serif; }
+body { margin:0; padding:20px; background:linear-gradient(135deg,#dff4ff,#f8f9ff); min-height:100vh; color:#222; }
+.main-title { text-align:center; font-size:clamp(28px,4vw,48px); font-weight:900; color:#ff2d2d; margin:8px 0 10px; text-shadow:3px 3px 0 white; }
+.sub-title { text-align:center; font-size:20px; font-weight:bold; margin-bottom:22px; }
+.toolbar { display:flex; justify-content:center; align-items:center; gap:12px; margin-bottom:22px; flex-wrap:wrap; }
+.tool-btn { border:0; padding:11px 18px; border-radius:12px; font-size:16px; font-weight:bold; cursor:pointer; box-shadow:0 3px 8px #0002; transition:.15s; }
+.tool-btn:hover { transform:translateY(-2px); }
+.green-btn { background:#35c759; color:white; }
+.red-btn { background:#ff4d4f; color:white; }
+.yellow-btn { background:#ffcc00; color:#333; }
+.gray-btn { background:#64748b; color:white; }
+.count-setting { display:flex; align-items:center; gap:9px; padding:8px 12px; background:white; border-radius:12px; box-shadow:0 3px 8px #0002; font-weight:bold; }
+.count-setting input { width:76px; padding:8px; border:2px solid #cbd5e1; border-radius:8px; font-size:16px; text-align:center; }
+.count-setting button { border:0; border-radius:8px; padding:9px 13px; background:#2563eb; color:white; font-weight:bold; cursor:pointer; }
+#countMessage { width:100%; text-align:center; color:#475569; font-size:14px; min-height:18px; }
+.grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.card { background:white; border-radius:20px; padding:15px; box-shadow:0 6px 16px #0002; border:4px solid #d6ebff; min-width:0; }
+.card.duplicate { border-color:#ff8c8c; background:#fff7f7; }
+.card-top { margin-bottom:12px; }
+select, .custom-input { width:100%; padding:10px; border-radius:10px; border:2px solid #ccc; font-size:16px; font-weight:bold; background:white; }
+.custom-input { margin-top:8px; display:none; }
+.warning { color:#e11d48; font-size:13px; font-weight:bold; margin-top:6px; min-height:18px; }
+.card-actions { display:flex; gap:6px; margin:10px 0; }
+.card-actions button { flex:1; border:0; border-radius:8px; padding:8px 4px; font-size:13px; font-weight:bold; cursor:pointer; }
+.stats { margin:10px 0 12px; display:flex; flex-wrap:wrap; gap:6px; font-size:13px; font-weight:bold; }
+.stats span { padding:5px 8px; border-radius:999px; }
+.ok-count { background:#e8fff0; color:#1d8f42; }
+.revise-count { background:#fff0f0; color:#d92d2d; }
+.missing-count { background:#fff8d9; color:#9a7600; }
+.student-grid { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:7px; }
+.student { aspect-ratio:1/1; border-radius:11px; display:flex; justify-content:center; align-items:center; font-weight:bold; color:white; cursor:pointer; user-select:none; transition:.15s; font-size:clamp(13px,1.5vw,17px); }
+.student:hover { transform:scale(1.06); }
+.correct { background:#35c759; }
+.revise { background:#ff4d4f; }
+.missing { background:#ffcc00; color:#333; }
+.legend { margin-top:25px; display:flex; justify-content:center; gap:24px; flex-wrap:wrap; font-size:16px; font-weight:bold; }
+.legend-item { display:flex; align-items:center; gap:8px; }
+.dot { width:20px; height:20px; border-radius:50%; }
+.dot.green { background:#35c759; } .dot.red { background:#ff4d4f; } .dot.yellow { background:#ffcc00; }
+.footer-note { text-align:center; margin-top:18px; color:#64748b; font-size:12px; }
+@media(max-width:1000px) { .grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(max-width:650px) {
+ body { padding:12px; } .grid { grid-template-columns:1fr; }
+ .student-grid { grid-template-columns:repeat(6,minmax(0,1fr)); }
+ .toolbar { gap:8px; } .tool-btn { padding:10px 12px; font-size:14px; }
+ .count-setting { flex-wrap:wrap; justify-content:center; }
+}
+</style>
+</head>
+<body>
+<div class="main-title">🚨 未訂正完成不能下課！ 🚨</div>
+<div class="sub-title">請盡快完成訂正並給老師確認</div>
+
+<div class="toolbar">
+  <div class="count-setting">
+    <label for="studentCount">全班人數</label>
+    <input id="studentCount" type="number" min="1" max="60" value="27">
+    <span>人</span>
+    <button type="button" id="applyCount">套用人數</button>
+  </div>
+  <button class="tool-btn green-btn" type="button" id="allGreen">全部恢復成綠色</button>
+  <button class="tool-btn red-btn" type="button" id="clearHomework">清空作業項目</button>
+  <div id="countMessage" aria-live="polite"></div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="legend">
+  <div class="legend-item"><div class="dot green"></div> 已完成</div>
+  <div class="legend-item"><div class="dot red"></div> 需要訂正</div>
+  <div class="legend-item"><div class="dot yellow"></div> 缺交</div>
+</div>
+<div class="footer-note">資料會儲存在目前瀏覽器中；更換裝置或瀏覽器不會自動同步。</div>
+
+<script>
+"use strict";
+
+const homeworkOptions = ["國習","國練","甲本","乙本","丙本","國卷","數習","數作","數卷","自行輸入"];
+const STORAGE_KEY = "homeworkCorrectionData";
+const COUNT_KEY = "homeworkCorrectionStudentCount";
+const grid = document.getElementById("grid");
+const countInput = document.getElementById("studentCount");
+const countMessage = document.getElementById("countMessage");
+let studentCount = 27;
+
+function defaultCardData() {
+  return { select:"", input:"", students:Array(studentCount).fill("correct") };
+}
+
+function buildCard(index, data = defaultCardData()) {
+  const card = document.createElement("section");
+  card.className = "card";
+  card.dataset.index = index;
+
+  const top = document.createElement("div");
+  top.className = "card-top";
+
+  const select = document.createElement("select");
+  select.className = "hw-select";
+  select.setAttribute("aria-label", `第${index + 1}格作業項目`);
+  const empty = document.createElement("option");
+  empty.value = "";
+  empty.textContent = "請選擇作業";
+  select.appendChild(empty);
+  homeworkOptions.forEach(item => {
+    const option = document.createElement("option");
+    option.value = item;
+    option.textContent = item;
+    select.appendChild(option);
+  });
+  select.value = data.select || "";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "custom-input";
+  input.placeholder = "請輸入作業名稱";
+  input.value = data.input || "";
+  input.style.display = select.value === "自行輸入" ? "block" : "none";
+
+  const warning = document.createElement("div");
+  warning.className = "warning";
+
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+  [
+    ["全綠", "green-btn", "correct"],
+    ["全紅", "red-btn", "revise"],
+    ["全黃", "yellow-btn", "missing"]
+  ].forEach(([label, className, status]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.textContent = label;
+    button.dataset.bulkStatus = status;
+    actions.appendChild(button);
+  });
+
+  const stats = document.createElement("div");
+  stats.className = "stats";
+  stats.innerHTML = '<span class="ok-count"></span><span class="revise-count"></span><span class="missing-count"></span>';
+
+  const students = document.createElement("div");
+  students.className = "student-grid";
+  const savedStatuses = Array.isArray(data.students) ? data.students : [];
+  for (let n = 0; n < studentCount; n++) {
+    const student = document.createElement("div");
+    const status = ["correct","revise","missing"].includes(savedStatuses[n]) ? savedStatuses[n] : "correct";
+    student.className = `student ${status}`;
+    student.textContent = String(n + 1).padStart(2, "0");
+    student.dataset.status = status;
+    student.setAttribute("role", "button");
+    student.setAttribute("tabindex", "0");
+    student.setAttribute("aria-label", `座號${n + 1}`);
+    students.appendChild(student);
+  }
+
+  top.append(select, input, warning, actions, stats);
+  card.append(top, students);
+  return card;
+}
+
+function getCurrentData() {
+  return [...grid.querySelectorAll(".card")].map(card => ({
+    select: card.querySelector(".hw-select").value,
+    input: card.querySelector(".custom-input").value,
+    students: [...card.querySelectorAll(".student")].map(el => el.dataset.status)
+  }));
+}
+
+function saveData() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getCurrentData()));
+    localStorage.setItem(COUNT_KEY, String(studentCount));
+    countMessage.textContent = "已自動儲存";
+  } catch (error) {
+    countMessage.textContent = "儲存失敗，請確認瀏覽器儲存空間設定";
+  }
+}
+
+function updateStats(card) {
+  const students = [...card.querySelectorAll(".student")];
+  const counts = { correct:0, revise:0, missing:0 };
+  students.forEach(student => counts[student.dataset.status]++);
+  card.querySelector(".ok-count").textContent = `✅ 正確：${counts.correct}`;
+  card.querySelector(".revise-count").textContent = `📝 訂正：${counts.revise}`;
+  card.querySelector(".missing-count").textContent = `📒 缺交：${counts.missing}`;
+}
+
+function setStudentStatus(student, status) {
+  student.classList.remove("correct", "revise", "missing");
+  student.classList.add(status);
+  student.dataset.status = status;
+}
+
+function updateAllStats() {
+  grid.querySelectorAll(".card").forEach(updateStats);
+}
+
+function checkDuplicate() {
+  const used = new Map();
+  const cards = [...grid.querySelectorAll(".card")];
+  cards.forEach(card => {
+    card.classList.remove("duplicate");
+    card.querySelector(".warning").textContent = "";
+    const select = card.querySelector(".hw-select");
+    const input = card.querySelector(".custom-input");
+    const value = select.value === "自行輸入" ? input.value.trim() : select.value;
+    if (value) {
+      if (!used.has(value)) used.set(value, []);
+      used.get(value).push(card);
+    }
+  });
+  used.forEach((sameCards) => {
+    if (sameCards.length > 1) {
+      sameCards.forEach(card => {
+        card.classList.add("duplicate");
+        card.querySelector(".warning").textContent = "⚠️ 此作業已在其他框框設定！";
+      });
+    }
+  });
+}
+
+function renderCards(data) {
+  grid.innerHTML = "";
+  for (let i = 0; i < 6; i++) grid.appendChild(buildCard(i, data?.[i] || defaultCardData()));
+  updateAllStats();
+  checkDuplicate();
+}
+
+function applyStudentCount() {
+  const requested = Number.parseInt(countInput.value, 10);
+  if (!Number.isInteger(requested) || requested < 1 || requested > 60) {
+    alert("請輸入 1 到 60 之間的人數。");
+    countInput.value = studentCount;
+    return;
+  }
+  if (requested === studentCount) {
+    countMessage.textContent = `目前全班 ${studentCount} 人，無須調整。`;
+    return;
+  }
+  const current = getCurrentData();
+  studentCount = requested;
+  const resized = current.map(item => {
+    const statuses = item.students.slice(0, studentCount);
+    while (statuses.length < studentCount) statuses.push("correct");
+    return { ...item, students:statuses };
+  });
+  renderCards(resized);
+  countInput.value = studentCount;
+  saveData();
+  countMessage.textContent = `已調整為 ${studentCount} 人；新增座號預設為綠色。`;
+}
+
+function loadData() {
+  let saved = null;
+  try {
+    const storedCount = Number.parseInt(localStorage.getItem(COUNT_KEY), 10);
+    if (Number.isInteger(storedCount) && storedCount >= 1 && storedCount <= 60) studentCount = storedCount;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) saved = JSON.parse(raw);
+  } catch (error) {
+    console.warn("讀取儲存資料失敗，將使用預設資料。", error);
+  }
+  // 舊版資料若沒有班級人數設定，依原本學生按鈕數量推定。
+  if (!localStorage.getItem(COUNT_KEY) && Array.isArray(saved) && Array.isArray(saved[0]?.students)) {
+    const oldCount = saved[0].students.length;
+    if (oldCount >= 1 && oldCount <= 60) studentCount = oldCount;
+  }
+  countInput.value = studentCount;
+  renderCards(Array.isArray(saved) ? saved : null);
+}
+
+grid.addEventListener("click", event => {
+  const card = event.target.closest(".card");
+  if (!card) return;
+
+  const bulkButton = event.target.closest("[data-bulk-status]");
+  if (bulkButton) {
+    const status = bulkButton.dataset.bulkStatus;
+    card.querySelectorAll(".student").forEach(student => setStudentStatus(student, status));
+    updateStats(card);
+    saveData();
+    return;
+  }
+
+  const student = event.target.closest(".student");
+  if (student) {
+    const next = { correct:"revise", revise:"missing", missing:"correct" };
+    setStudentStatus(student, next[student.dataset.status]);
+    updateStats(card);
+    saveData();
+  }
+});
+
+grid.addEventListener("keydown", event => {
+  const student = event.target.closest(".student");
+  if (student && (event.key === "Enter" || event.key === " ")) {
+    event.preventDefault();
+    student.click();
+  }
+});
+
+grid.addEventListener("change", event => {
+  if (event.target.matches(".hw-select")) {
+    const card = event.target.closest(".card");
+    const input = card.querySelector(".custom-input");
+    if (event.target.value === "自行輸入") {
+      input.style.display = "block";
+      input.focus();
+    } else {
+      input.style.display = "none";
+      input.value = "";
+    }
+    checkDuplicate();
+    saveData();
+  }
+});
+
+grid.addEventListener("input", event => {
+  if (event.target.matches(".custom-input")) {
+    checkDuplicate();
+    saveData();
+  }
+});
+
+document.getElementById("applyCount").addEventListener("click", applyStudentCount);
+countInput.addEventListener("keydown", event => {
+  if (event.key === "Enter") applyStudentCount();
+});
+
+document.getElementById("allGreen").addEventListener("click", () => {
+  if (!confirm("確定要將六個作業方框的所有學生全部設為綠色嗎？")) return;
+  grid.querySelectorAll(".student").forEach(student => setStudentStatus(student, "correct"));
+  updateAllStats();
+  saveData();
+});
+
+document.getElementById("clearHomework").addEventListener("click", () => {
+  if (!confirm("確定要清空六個作業項目嗎？學生顏色狀態會保留。")) return;
+  grid.querySelectorAll(".card").forEach(card => {
+    card.querySelector(".hw-select").value = "";
+    const input = card.querySelector(".custom-input");
+    input.value = "";
+    input.style.display = "none";
+    card.classList.remove("duplicate");
+    card.querySelector(".warning").textContent = "";
+  });
+  saveData();
+});
+
+loadData();
+</script>
+</body>
+</html>
